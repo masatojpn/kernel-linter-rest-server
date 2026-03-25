@@ -1,11 +1,10 @@
 import crypto from "node:crypto";
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import { kv } from "@vercel/kv";
 import { env } from "@/lib/env";
 import type { SessionRecord } from "@/lib/types";
 
-const DATA_DIR = path.join(process.cwd(), ".data");
-const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");
+const SESSION_KEY_PREFIX = "kernel:session:";
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 
 function now(): number {
   return Date.now();
@@ -30,25 +29,8 @@ function sign(value: string): string {
     .digest("base64url");
 }
 
-async function ensureDataFile(): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-
-  try {
-    await fs.access(SESSIONS_FILE);
-  } catch {
-    await fs.writeFile(SESSIONS_FILE, "{}", "utf8");
-  }
-}
-
-async function readSessions(): Promise<Record<string, SessionRecord>> {
-  await ensureDataFile();
-  const raw = await fs.readFile(SESSIONS_FILE, "utf8");
-  return JSON.parse(raw) as Record<string, SessionRecord>;
-}
-
-async function writeSessions(data: Record<string, SessionRecord>): Promise<void> {
-  await ensureDataFile();
-  await fs.writeFile(SESSIONS_FILE, JSON.stringify(data, null, 2), "utf8");
+function getSessionKey(sessionToken: string): string {
+  return SESSION_KEY_PREFIX + sessionToken;
 }
 
 export function createOAuthState(): string {
@@ -64,7 +46,9 @@ export function createOAuthState(): string {
 }
 
 export function consumeOAuthState(state: string): boolean {
-  const [encodedPayload, signature] = state.split(".");
+  const parts = state.split(".");
+  const encodedPayload = parts[0];
+  const signature = parts[1];
 
   if (!encodedPayload || !signature) {
     return false;
@@ -82,7 +66,7 @@ export function consumeOAuthState(state: string): boolean {
     };
 
     return now() - payload.createdAt < 10 * 60 * 1000;
-  } catch {
+  } catch (error) {
     return false;
   }
 }
@@ -90,33 +74,33 @@ export function consumeOAuthState(state: string): boolean {
 export async function createSession(
   input: Omit<SessionRecord, "sessionToken" | "createdAt" | "updatedAt">
 ): Promise<SessionRecord> {
+  const timestamp = now();
   const sessionToken = randomToken(32);
 
   const record: SessionRecord = {
     ...input,
     sessionToken,
-    createdAt: now(),
-    updatedAt: now()
+    createdAt: timestamp,
+    updatedAt: timestamp
   };
 
-  const sessions = await readSessions();
-  sessions[sessionToken] = record;
-  await writeSessions(sessions);
+  await kv.set(getSessionKey(sessionToken), record, {
+    ex: SESSION_TTL_SECONDS
+  });
 
   return record;
 }
 
 export async function getSession(sessionToken: string): Promise<SessionRecord | null> {
-  const sessions = await readSessions();
-  return sessions[sessionToken] ?? null;
+  const record = await kv.get<SessionRecord>(getSessionKey(sessionToken));
+  return record || null;
 }
 
 export async function updateSession(
   sessionToken: string,
   patch: Partial<SessionRecord>
 ): Promise<SessionRecord | null> {
-  const sessions = await readSessions();
-  const current = sessions[sessionToken];
+  const current = await getSession(sessionToken);
 
   if (!current) {
     return null;
@@ -126,11 +110,13 @@ export async function updateSession(
     ...current,
     ...patch,
     sessionToken: current.sessionToken,
+    createdAt: current.createdAt,
     updatedAt: now()
   };
 
-  sessions[sessionToken] = next;
-  await writeSessions(sessions);
+  await kv.set(getSessionKey(sessionToken), next, {
+    ex: SESSION_TTL_SECONDS
+  });
 
   return next;
 }
