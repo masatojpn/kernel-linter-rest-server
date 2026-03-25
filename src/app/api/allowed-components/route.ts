@@ -110,7 +110,7 @@ export async function POST(request: Request): Promise<Response> {
 
     try {
       body = (await request.json()) as AllowedComponentsRequest;
-    } catch {
+    } catch (error) {
       return jsonResponse(
         {
           ok: false,
@@ -140,7 +140,7 @@ export async function POST(request: Request): Promise<Response> {
     }> = [];
 
     for (const source of sources) {
-      const file = await fetchFigmaFile(sessionToken, source.fileKey);
+      const file = await fetchFigmaFile(session.accessToken, source.fileKey);
       const result = extractAllowedComponentKeys(file, source.pageName);
 
       if (!result.pageFound) {
@@ -181,6 +181,10 @@ export async function POST(request: Request): Promise<Response> {
       {
         ok: false,
         error: message,
+        debug:
+        error && typeof error === "object"
+          ? JSON.parse(JSON.stringify(error, Object.getOwnPropertyNames(error)))
+          : String(error),
       },
       500
     );
