@@ -11,6 +11,22 @@ function getConnectRequestKey(requestId: string): string {
   return CONNECT_REQUEST_KEY_PREFIX + requestId;
 }
 
+function createCorsHeaders(): HeadersInit {
+  return {
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, OPTIONS",
+    "access-control-allow-headers": "content-type",
+    "content-type": "application/json; charset=utf-8"
+  };
+}
+
+export async function OPTIONS(): Promise<Response> {
+  return new Response(null, {
+    status: 204,
+    headers: createCorsHeaders()
+  });
+}
+
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const requestId = url.searchParams.get("requestId");
@@ -18,7 +34,10 @@ export async function GET(request: Request): Promise<Response> {
   if (!requestId) {
     return Response.json(
       { ok: false, error: "Missing requestId" },
-      { status: 400 }
+      {
+        status: 400,
+        headers: createCorsHeaders()
+      }
     );
   }
 
@@ -31,7 +50,10 @@ export async function GET(request: Request): Promise<Response> {
         ok: true,
         pending: true
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: createCorsHeaders()
+      }
     );
   }
 
@@ -42,6 +64,9 @@ export async function GET(request: Request): Promise<Response> {
       sessionToken: result.sessionToken,
       figmaUserId: result.figmaUserId
     },
-    { status: 200 }
+    {
+      status: 200,
+      headers: createCorsHeaders()
+    }
   );
 }
