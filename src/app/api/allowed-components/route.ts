@@ -173,7 +173,7 @@ export async function POST(request: Request): Promise<Response> {
         fileKey: source.fileKey,
       });
 
-      const file = await fetchFigmaFile(session.accessToken, source.fileKey);
+      const file = await fetchFigmaFile(session.sessionToken, source.fileKey);
 
       console.log("[allowed-components] fetchFigmaFile success", {
         fileKey: source.fileKey,
