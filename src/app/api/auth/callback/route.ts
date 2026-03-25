@@ -45,40 +45,64 @@ export async function GET(request: Request): Promise<Response> {
 });
 
     const html = `
-      <!doctype html>
-      <html lang="ja">
-        <head>
-          <meta charset="utf-8" />
-          <title>Kernel OAuth Complete</title>
-          <style>
-            body {
-              font-family: sans-serif;
-              padding: 24px;
-            }
-          </style>
-        </head>
-        <body>
-          <p>認証が完了しました。このウィンドウは閉じて大丈夫です。</p>
-          <script>
-            (function () {
-              var payload = {
-                type: "kernel-oauth-complete",
-                sessionToken: ${JSON.stringify(session.sessionToken)},
-                figmaUserId: ${JSON.stringify(session.figmaUserId)}
-              };
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>Kernel OAuth Complete</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 24px;
+        line-height: 1.6;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-all;
+        padding: 12px;
+        border: 1px solid #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <p>認証完了デバッグ</p>
+    <pre id="debug"></pre>
+    <script>
+      (function () {
+        var debugEl = document.getElementById("debug");
 
-              if (window.opener) {
-                window.opener.postMessage(payload, "*");
-              }
+        function log(value) {
+          debugEl.textContent += String(value) + "\\n";
+        }
 
-              setTimeout(function () {
-                window.close();
-              }, 300);
-            })();
-          </script>
-        </body>
-      </html>
-      `;
+        var payload = {
+          type: "kernel-oauth-complete",
+          sessionToken: ${JSON.stringify(session.sessionToken)},
+          figmaUserId: ${JSON.stringify(session.figmaUserId)}
+        };
+
+        log("script start");
+        log("opener exists: " + String(!!window.opener));
+        log("has sessionToken: " + String(!!payload.sessionToken));
+        log("sessionToken length: " + String(payload.sessionToken ? payload.sessionToken.length : 0));
+
+        try {
+          if (window.opener) {
+            window.opener.postMessage(payload, "*");
+            log("postMessage sent");
+          } else {
+            log("opener missing");
+          }
+        } catch (e) {
+          log("postMessage error: " + (e && e.message ? e.message : String(e)));
+        }
+
+        log("done");
+      })();
+    </script>
+  </body>
+</html>
+`;
 
       return new Response(html, {
         status: 200,
