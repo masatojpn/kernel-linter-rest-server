@@ -1,21 +1,25 @@
-import { env } from "@/lib/env";
 import { extractAllowedComponentKeys } from "@/lib/allowed-components";
 import { fetchFigmaFile } from "@/lib/figma-api";
 import { getSession } from "@/lib/session";
-import type { AllowedComponentsResponse, ErrorResponse } from "@/lib/types";
+import type {
+  AllowedComponentsRequest,
+  AllowedComponentsResponse,
+  AllowedSource,
+  ErrorResponse,
+} from "@/lib/types";
 
 function corsHeaders(): HeadersInit {
   return {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Cache-Control": "no-store",
   };
 }
 
-function jsonResponse(body: AllowedComponentsResponse | ErrorResponse, status: number): Response {
+function jsonResponse(body: AllowedComponentsResponse | ErrorResponse | Record<string, unknown>, status: number): Response {
   return new Response(JSON.stringify(body), {
-    status: status,
+    status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       ...corsHeaders(),
@@ -34,6 +38,41 @@ function getBearerToken(request: Request): string | null {
   return parts[1];
 }
 
+function normalizeSources(input: unknown): AllowedSource[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const result: AllowedSource[] = [];
+
+  for (const item of input) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+
+    const fileKey =
+      "fileKey" in item && typeof item.fileKey === "string"
+        ? item.fileKey.trim()
+        : "";
+
+    const pageName =
+      "pageName" in item && typeof item.pageName === "string"
+        ? item.pageName.trim()
+        : "";
+
+    if (!fileKey || !pageName) {
+      continue;
+    }
+
+    result.push({
+      fileKey,
+      pageName,
+    });
+  }
+
+  return result;
+}
+
 export async function OPTIONS(): Promise<Response> {
   return new Response(null, {
     status: 204,
@@ -41,7 +80,7 @@ export async function OPTIONS(): Promise<Response> {
   });
 }
 
-export async function GET(request: Request): Promise<Response> {
+export async function POST(request: Request): Promise<Response> {
   try {
     const sessionToken = getBearerToken(request);
 
@@ -67,25 +106,71 @@ export async function GET(request: Request): Promise<Response> {
       );
     }
 
-    const file = await fetchFigmaFile(sessionToken, env.KERNEL_DS_FILE_KEY);
-    const result = extractAllowedComponentKeys(file, env.KERNEL_ALLOWED_PAGE_NAME);
+    let body: AllowedComponentsRequest;
 
-    if (!result.pageFound) {
+    try {
+      body = (await request.json()) as AllowedComponentsRequest;
+    } catch {
       return jsonResponse(
         {
           ok: false,
-          error: "Page not found: " + env.KERNEL_ALLOWED_PAGE_NAME,
+          error: "Invalid JSON body",
         },
-        404
+        400
       );
+    }
+
+    const sources = normalizeSources(body.sources);
+
+    if (sources.length === 0) {
+      return jsonResponse(
+        {
+          ok: false,
+          error: "No valid sources",
+        },
+        400
+      );
+    }
+
+    const mergedKeys = new Set<string>();
+    const sourceResults: Array<{
+      fileKey: string;
+      pageName: string;
+      count: number;
+    }> = [];
+
+    for (const source of sources) {
+      const file = await fetchFigmaFile(sessionToken, source.fileKey);
+      const result = extractAllowedComponentKeys(file, source.pageName);
+
+      if (!result.pageFound) {
+        return jsonResponse(
+          {
+            ok: false,
+            error: "Page not found: " + source.pageName,
+            fileKey: source.fileKey,
+            pageName: source.pageName,
+          },
+          404
+        );
+      }
+
+      for (const key of result.keys) {
+        mergedKeys.add(key);
+      }
+
+      sourceResults.push({
+        fileKey: source.fileKey,
+        pageName: source.pageName,
+        count: result.keys.length,
+      });
     }
 
     return jsonResponse(
       {
         ok: true,
-        fileKey: env.KERNEL_DS_FILE_KEY,
-        pageName: env.KERNEL_ALLOWED_PAGE_NAME,
-        allowedKeys: result.keys,
+        allowedKeys: Array.from(mergedKeys),
+        sources: sourceResults,
       },
       200
     );

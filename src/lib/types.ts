@@ -31,3 +31,12 @@ export type ErrorResponse = {
   ok: false;
   error: string;
 };
+
+export type AllowedSource = {
+  fileKey: string;
+  pageName: string;
+};
+
+export type AllowedComponentsRequest = {
+  sources: AllowedSource[];
+};
