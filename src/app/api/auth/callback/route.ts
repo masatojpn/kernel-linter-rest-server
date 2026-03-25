@@ -68,12 +68,12 @@ export async function GET(request: Request): Promise<Response> {
       </html>
       `;
 
-      return new Response(html, {
-        status: 200,
-        headers: {
-          "content-type": "text/html; charset=utf-8"
-        }
-      });
+      return new Response("CALLBACK_HTML_V2", {
+  status: 200,
+  headers: {
+    "content-type": "text/plain; charset=utf-8"
+  }
+});
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
 
