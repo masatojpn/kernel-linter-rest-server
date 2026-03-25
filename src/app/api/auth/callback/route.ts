@@ -56,7 +56,7 @@ export async function GET(request: Request): Promise<Response> {
               };
 
               if (window.opener) {
-                window.opener.postMessage(payload, ${JSON.stringify(new URL(request.url).origin)});
+                window.opener.postMessage(payload, "*");
               }
 
               setTimeout(function () {
