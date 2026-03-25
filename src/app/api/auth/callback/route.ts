@@ -1,5 +1,9 @@
 import { exchangeCodeForToken } from "@/lib/figma-oauth";
-import { consumeOAuthState, createSession } from "@/lib/session";
+import {
+  consumeOAuthState,
+  createSession,
+  saveConnectRequestResult
+} from "@/lib/session";
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -9,24 +13,34 @@ export async function GET(request: Request): Promise<Response> {
   const error = url.searchParams.get("error");
 
   console.log("[callback] start", {
-  hasCode: !!code,
-  hasState: !!state,
-  error: error
-});
+    hasCode: !!code,
+    hasState: !!state,
+    error: error
+  });
 
   if (error) {
     return Response.json({ ok: false, error }, { status: 400 });
   }
 
   if (!code || !state) {
-    return Response.json({ ok: false, error: "Missing code or state" }, { status: 400 });
+    return Response.json(
+      { ok: false, error: "Missing code or state" },
+      { status: 400 }
+    );
   }
 
-  const validState = consumeOAuthState(state);
+  const requestId = consumeOAuthState(state);
 
-  if (!validState) {
-    return Response.json({ ok: false, error: "Invalid or expired OAuth state" }, { status: 400 });
+  if (!requestId) {
+    return Response.json(
+      { ok: false, error: "Invalid or expired OAuth state" },
+      { status: 400 }
+    );
   }
+
+  console.log("[callback] oauth state consumed", {
+    requestId: requestId
+  });
 
   try {
     const token = await exchangeCodeForToken(code);
@@ -39,10 +53,22 @@ export async function GET(request: Request): Promise<Response> {
     });
 
     console.log("[callback] session created", {
-  figmaUserId: session.figmaUserId,
-  hasSessionToken: !!session.sessionToken,
-  sessionTokenLength: session.sessionToken ? session.sessionToken.length : 0
-});
+      figmaUserId: session.figmaUserId,
+      hasSessionToken: !!session.sessionToken,
+      sessionTokenLength: session.sessionToken ? session.sessionToken.length : 0
+    });
+
+    await saveConnectRequestResult(
+      requestId,
+      session.sessionToken,
+      session.figmaUserId
+    );
+
+    console.log("[callback] connect request result saved", {
+      requestId: requestId,
+      figmaUserId: session.figmaUserId,
+      hasSessionToken: !!session.sessionToken
+    });
 
     const html = `
 <!doctype html>
@@ -65,7 +91,7 @@ export async function GET(request: Request): Promise<Response> {
     </style>
   </head>
   <body>
-    <p>認証完了デバッグ</p>
+    <p>認証が完了しました。このウィンドウは閉じて大丈夫です。</p>
     <pre id="debug"></pre>
     <script>
       (function () {
@@ -75,41 +101,21 @@ export async function GET(request: Request): Promise<Response> {
           debugEl.textContent += String(value) + "\\n";
         }
 
-        var payload = {
-          type: "kernel-oauth-complete",
-          sessionToken: ${JSON.stringify(session.sessionToken)},
-          figmaUserId: ${JSON.stringify(session.figmaUserId)}
-        };
-
-        log("script start");
-        log("opener exists: " + String(!!window.opener));
-        log("has sessionToken: " + String(!!payload.sessionToken));
-        log("sessionToken length: " + String(payload.sessionToken ? payload.sessionToken.length : 0));
-
-        try {
-          if (window.opener) {
-            window.opener.postMessage(payload, "*");
-            log("postMessage sent");
-          } else {
-            log("opener missing");
-          }
-        } catch (e) {
-          log("postMessage error: " + (e && e.message ? e.message : String(e)));
-        }
-
-        log("done");
+        log("callback complete");
+        log("requestId saved to server");
+        log("you can close this window");
       })();
     </script>
   </body>
 </html>
 `;
 
-      return new Response(html, {
-        status: 200,
-        headers: {
-          "content-type": "text/html; charset=utf-8"
-        }
-      });
+    return new Response(html, {
+      status: 200,
+      headers: {
+        "content-type": "text/html; charset=utf-8"
+      }
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
 
