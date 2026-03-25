@@ -8,6 +8,12 @@ export async function GET(request: Request): Promise<Response> {
   const state = url.searchParams.get("state");
   const error = url.searchParams.get("error");
 
+  console.log("[callback] start", {
+  hasCode: !!code,
+  hasState: !!state,
+  error: error
+});
+
   if (error) {
     return Response.json({ ok: false, error }, { status: 400 });
   }
@@ -31,6 +37,12 @@ export async function GET(request: Request): Promise<Response> {
       refreshToken: token.refresh_token,
       expiresAt: Date.now() + token.expires_in * 1000
     });
+
+    console.log("[callback] session created", {
+  figmaUserId: session.figmaUserId,
+  hasSessionToken: !!session.sessionToken,
+  sessionTokenLength: session.sessionToken ? session.sessionToken.length : 0
+});
 
     const html = `
       <!doctype html>
