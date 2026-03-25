@@ -32,11 +32,48 @@ export async function GET(request: Request): Promise<Response> {
       expiresAt: Date.now() + token.expires_in * 1000
     });
 
-    return Response.json({
-      ok: true,
-      sessionToken: session.sessionToken,
-      figmaUserId: session.figmaUserId
-    });
+    const html = `
+      <!doctype html>
+      <html lang="ja">
+        <head>
+          <meta charset="utf-8" />
+          <title>Kernel OAuth Complete</title>
+          <style>
+            body {
+              font-family: sans-serif;
+              padding: 24px;
+            }
+          </style>
+        </head>
+        <body>
+          <p>認証が完了しました。このウィンドウは閉じて大丈夫です。</p>
+          <script>
+            (function () {
+              var payload = {
+                type: "kernel-oauth-complete",
+                sessionToken: ${JSON.stringify(session.sessionToken)},
+                figmaUserId: ${JSON.stringify(session.figmaUserId)}
+              };
+
+              if (window.opener) {
+                window.opener.postMessage(payload, ${JSON.stringify(new URL(request.url).origin)});
+              }
+
+              setTimeout(function () {
+                window.close();
+              }, 300);
+            })();
+          </script>
+        </body>
+      </html>
+      `;
+
+      return new Response(html, {
+        status: 200,
+        headers: {
+          "content-type": "text/html; charset=utf-8"
+        }
+      });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
 
