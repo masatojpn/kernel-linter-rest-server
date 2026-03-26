@@ -3,6 +3,14 @@ import { resolveSessionUser } from "@/lib/auth/resolve-session";
 import { getBillingAccessByUserId } from "@/lib/billing/access-repository";
 import { resolveAccess } from "@/lib/billing/resolve-access";
 
+function createCorsHeaders(): HeadersInit {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type"
+  };
+}
+
 function getSessionTokenFromRequest(request: Request): string {
   const url = new URL(request.url);
   const sessionToken = url.searchParams.get("sessionToken");
@@ -12,6 +20,13 @@ function getSessionTokenFromRequest(request: Request): string {
   }
 
   return sessionToken;
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: createCorsHeaders()
+  });
 }
 
 export async function GET(request: Request) {
@@ -27,7 +42,8 @@ export async function GET(request: Request) {
         }
       },
       {
-        status: 400
+        status: 400,
+        headers: createCorsHeaders()
       }
     );
   }
@@ -44,7 +60,8 @@ export async function GET(request: Request) {
         }
       },
       {
-        status: 401
+        status: 401,
+        headers: createCorsHeaders()
       }
     );
   }
@@ -52,8 +69,13 @@ export async function GET(request: Request) {
   const billingAccess = await getBillingAccessByUserId(sessionUser.userId);
   const resolved = resolveAccess(billingAccess);
 
-  return NextResponse.json({
-    ok: true,
-    data: resolved
-  });
+  return NextResponse.json(
+    {
+      ok: true,
+      data: resolved
+    },
+    {
+      headers: createCorsHeaders()
+    }
+  );
 }
