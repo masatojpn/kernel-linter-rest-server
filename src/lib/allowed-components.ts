@@ -36,53 +36,57 @@ function normalizeSignaturePart(value: string): string {
   return value.trim();
 }
 
+// function buildVariantSignatureFromNode(node: FigmaNode): string {
+//   const maybeNode = node as FigmaNode & {
+//     componentProperties?: Record<
+//       string,
+//       {
+//         type?: string;
+//         value?: string | boolean;
+//       }
+//     > | null;
+//   };
+
+//   const componentProperties = maybeNode.componentProperties;
+
+//   if (!componentProperties || typeof componentProperties !== "object") {
+//     return "";
+//   }
+
+//   const keys = Object.keys(componentProperties).sort();
+
+//   if (keys.length === 0) {
+//     return "";
+//   }
+
+//   const parts: string[] = [];
+
+//   for (const key of keys) {
+//     const property = componentProperties[key];
+
+//     if (!property || typeof property !== "object") {
+//       continue;
+//     }
+
+//     const value =
+//       "value" in property &&
+//       (typeof property.value === "string" ||
+//         typeof property.value === "boolean")
+//         ? String(property.value)
+//         : "";
+
+//     parts.push(key + "=" + value);
+//   }
+
+//   if (parts.length === 0) {
+//     return "";
+//   }
+
+//   return "::" + parts.join("|");
+// }
+
 function buildVariantSignatureFromNode(node: FigmaNode): string {
-  const maybeNode = node as FigmaNode & {
-    componentProperties?: Record<
-      string,
-      {
-        type?: string;
-        value?: string | boolean;
-      }
-    > | null;
-  };
-
-  const componentProperties = maybeNode.componentProperties;
-
-  if (!componentProperties || typeof componentProperties !== "object") {
-    return "";
-  }
-
-  const keys = Object.keys(componentProperties).sort();
-
-  if (keys.length === 0) {
-    return "";
-  }
-
-  const parts: string[] = [];
-
-  for (const key of keys) {
-    const property = componentProperties[key];
-
-    if (!property || typeof property !== "object") {
-      continue;
-    }
-
-    const value =
-      "value" in property &&
-      (typeof property.value === "string" ||
-        typeof property.value === "boolean")
-        ? String(property.value)
-        : "";
-
-    parts.push(key + "=" + value);
-  }
-
-  if (parts.length === 0) {
-    return "";
-  }
-
-  return "::" + parts.join("|");
+  return "";
 }
 
 function buildLegacySignatureForComponentLike(
@@ -91,12 +95,7 @@ function buildLegacySignatureForComponentLike(
   variantSuffix: string
 ): string {
   if (componentSetName) {
-    return (
-      normalizeSignaturePart(componentSetName) +
-      "::" +
-      normalizeSignaturePart(componentName) +
-      variantSuffix
-    );
+    return normalizeSignaturePart(componentSetName);
   }
 
   return normalizeSignaturePart(componentName);
@@ -140,12 +139,11 @@ function buildLegacySignatureFromComponentNode(
   }
 
   const componentSetName = findComponentSetNameForComponentNode(root, node.id);
-  const variantSuffix = buildVariantSignatureFromNode(node);
 
   return buildLegacySignatureForComponentLike(
     node.name,
     componentSetName,
-    variantSuffix
+    ""
   );
 }
 
@@ -176,12 +174,10 @@ function buildLegacySignatureFromInstanceNode(
     );
   }
 
-  const variantSuffix = buildVariantSignatureFromNode(node);
-
   return buildLegacySignatureForComponentLike(
     componentMeta.name,
     componentSetName,
-    variantSuffix
+    ""
   );
 }
 
