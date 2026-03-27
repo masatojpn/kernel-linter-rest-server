@@ -1,4 +1,4 @@
-import { extractAllowedComponentKeys } from "@/lib/allowed-components";
+import { extractAllowedComponents } from "@/lib/allowed-components";
 import { fetchFigmaFile } from "@/lib/figma-api";
 import { getSession } from "@/lib/session";
 import type {
@@ -157,10 +157,12 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const mergedKeys = new Set<string>();
+    const mergedSignatures = new Set<string>();
     const sourceResults: Array<{
       fileKey: string;
       pageName: string;
       count: number;
+      signatureCount: number;
     }> = [];
 
     for (const source of sources) {
@@ -181,18 +183,19 @@ export async function POST(request: Request): Promise<Response> {
         hasComponents: !!file && !!file.components,
       });
 
-      console.log("[allowed-components] extractAllowedComponentKeys start", {
+      console.log("[allowed-components] extractAllowedComponents start", {
         fileKey: source.fileKey,
         pageName: source.pageName,
       });
 
-      const result = extractAllowedComponentKeys(file, source.pageName);
+      const result = extractAllowedComponents(file, source.pageName);
 
-      console.log("[allowed-components] extractAllowedComponentKeys success", {
+      console.log("[allowed-components] extractAllowedComponents success", {
         fileKey: source.fileKey,
         pageName: source.pageName,
         pageFound: result.pageFound,
         keyCount: result.keys.length,
+        signatureCount: result.signatures.length,
       });
 
       if (!result.pageFound) {
@@ -211,15 +214,21 @@ export async function POST(request: Request): Promise<Response> {
         mergedKeys.add(key);
       }
 
+      for (const signature of result.signatures) {
+        mergedSignatures.add(signature);
+      }
+
       sourceResults.push({
         fileKey: source.fileKey,
         pageName: source.pageName,
         count: result.keys.length,
+        signatureCount: result.signatures.length,
       });
     }
 
     console.log("[allowed-components] success", {
       mergedKeyCount: mergedKeys.size,
+      mergedSignatureCount: mergedSignatures.size,
       sourceCount: sourceResults.length,
     });
 
@@ -227,6 +236,7 @@ export async function POST(request: Request): Promise<Response> {
       {
         ok: true,
         allowedKeys: Array.from(mergedKeys),
+        allowedSignatures: Array.from(mergedSignatures),
         sources: sourceResults,
       },
       200
